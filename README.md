@@ -19,9 +19,4 @@ You can also use the AWS CloudFormation templates as a starting point for your o
 For architectural details, best practices, step-by-step instructions, and customization options, see the [deployment guide](https://s3.amazonaws.com/quickstart-reference/ibm/spectrum/scale/latest/doc/ibm-spectrum-scale-on-the-aws-cloud.pdf).
 
 To post feedback, submit feature ideas, or report bugs, use the **Issues** section of this GitHub repo.
-If you'd like to submit code for this Quick Start, please review the [AWS Quick Start Contributor's Kit](https://aws-quickstart.github.io/). 
-
-Create IAM user account which can satisfy all access to deploy IBM Spectrum Scale on AWS. 
-  Please follow https://developer.ibm.com/storage/2017/10/30/iam-user-deploy-ibm-spectrum-scale-aws/  link to create IAM user account and attach SpectrumScale policy.
-  
-blog: https://developer.ibm.com/storage/2017/09/18/deploy-ibm-spectrum-scale-on-aws-quick-start/
+If you'd like to submit code for this Quick Start, please review the [AWS Quick Start Contributor's Kit](https://aws-quickstart.github.io/).
