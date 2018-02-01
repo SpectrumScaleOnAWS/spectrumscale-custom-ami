@@ -770,9 +770,9 @@
                                         "ec2:DescribeInstanceRecoveryAttribute",
                                         "ec2:RecoverInstances",
                                         "ssm:DescribeParameters",
-      									"ssm:PutParameter",
-      									"ssm:GetParameters",
-      									"ssm:DeleteParameter"
+      									                "ssm:PutParameter",
+      									                "ssm:GetParameters",
+      									                "ssm:DeleteParameter"
                                     ],
                                     "Effect": "Allow"
                                 },

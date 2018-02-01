@@ -217,7 +217,7 @@
             ]
         },
         "DataReplica": {
-            "Description": "Number of replica copies of data across the all cluster nodes on two AZs.",
+            "Description": "Number of replica copies of data across the cluster nodes.",
             "Type": "Number",
             "Default": "2",
             "AllowedValues": [
@@ -603,30 +603,6 @@
 	            },
 	            "1"
             ]     
-        },
-        "NATInstanceCondition": {
-            "Fn::And": [
-                {
-                    "Condition": "ReplicaOneCondition"
-                },
-                {
-                    "Condition": "GovCloudCondition"
-                }
-            ]
-        },
-        "NATGatewayCondition": {
-            "Fn::And": [
-                {
-                    "Condition": "ReplicaOneCondition"
-                },
-                {
-                    "Fn::Not": [
-                        {
-                            "Condition": "GovCloudCondition"
-                        }
-                    ]
-                }
-            ]
         }
     },
     "Resources": {
@@ -673,6 +649,51 @@
                  }   
             }
         },
+        "SubnetNATStack": {
+            "DependsOn": "VPCStack",
+            "Condition": "ReplicaOneCondition",
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/ibm-spectrum-scale-subnet.template"
+                },
+                "Tags" : [ { "Key" : "Version", "Value" : "v1.2" } ],
+                "Parameters": {
+                    "AvailabilityZones": {
+                        "Fn::Join": [
+                            ",",
+                            {
+                                "Ref": "AvailabilityZones"
+                            }
+                        ]
+                    },
+                    "VPCCIDR": {
+                        "Fn::GetAtt": [
+                               "VPCStack",
+                               "Outputs.VPCCIDR"
+                         ]
+                    },
+                    "VpcId": {
+                         "Fn::GetAtt": [
+                               "VPCStack",
+                               "Outputs.VPCID"
+                          ]
+                    },
+                    "KeyPairName": {
+                        "Ref": "KeyPairName"
+                    },
+                    "PrivateSubnet1ACIDR": {
+                        "Ref": "PrivateSubnet1CIDR"
+                    },
+                    "PublicSubnet1ID": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.PublicSubnet1ID"
+                        ]
+                    }
+                 }   
+            }
+        },
         "BastionStack": {
             "DependsOn": "VPCStack",
             "Type": "AWS::CloudFormation::Stack",
@@ -713,216 +734,6 @@
                         ]
                     }
                 }
-            }
-        },
-        "PrivateSubnet1ID": {
-            "Condition": "ReplicaOneCondition",
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Fn::GetAtt": [
-                            "VPCStack",
-                            "Outputs.VPCID"
-                        ]
-                },
-                "CidrBlock": {
-                    "Ref": "PrivateSubnet1CIDR"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        "0",
-                        {
-                            "Ref": "AvailabilityZones"
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "Private subnet 1"
-                    },
-                    {
-                        "Key": "Network",
-                        "Value": "Private"
-                    }
-                ]
-            }
-        },
-        "PrivateSubnet1RouteTable": {
-            "Condition": "ReplicaOneCondition",
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Fn::GetAtt": [
-                            "VPCStack",
-                            "Outputs.VPCID"
-                        ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "Private subnet 1"
-                    },
-                    {
-                        "Key": "Network",
-                        "Value": "Private"
-                    }
-                ]
-            }
-        },
-        "PrivateSubnet1Route": {
-            "Condition": "ReplicaOneCondition",
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PrivateSubnet1RouteTable"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "InstanceId": {
-                    "Fn::If": [
-                        "NATInstanceCondition",
-                        {
-                            "Ref": "NATInstance1"
-                        },
-                        {
-                            "Ref": "AWS::NoValue"
-                        }
-                    ]
-                },
-                "NatGatewayId": {
-                    "Fn::If": [
-                        "NATGatewayCondition",
-                        {
-                            "Ref": "NATGateway1"
-                        },
-                        {
-                            "Ref": "AWS::NoValue"
-                        }
-                    ]
-                }
-            }
-        },
-        "PrivateSubnet1RouteTableAssociation": {
-            "Condition": "ReplicaOneCondition",
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet1ID"
-                },
-                "RouteTableId": {
-                    "Ref": "PrivateSubnet1RouteTable"
-                }
-            }
-        },
-        "NAT1EIP": {
-            "Condition": "ReplicaOneCondition",
-            "Type": "AWS::EC2::EIP",
-            "Properties": {
-                "Domain": "vpc",
-                "InstanceId": {
-                    "Fn::If": [
-                        "NATInstanceCondition",
-                        {
-                            "Ref": "NATInstance1"
-                        },
-                        {
-                            "Ref": "AWS::NoValue"
-                        }
-                    ]
-                }
-            }
-        },
-        "NATGateway1": {
-            "Condition": "NATGatewayCondition",
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NAT1EIP",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                        "Fn::GetAtt": [
-                            "VPCStack",
-                            "Outputs.PublicSubnet1ID"
-                        ]
-                    }
-            }
-        },
-        "NATInstance1": {
-            "Condition": "NATInstanceCondition",
-            "Type": "AWS::EC2::Instance",
-            "Properties": {
-                "ImageId": {
-                    "Fn::FindInMap": [
-                        "AWSAMIRegionMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AWSNATHVM"
-                    ]
-                },
-                "InstanceType": "t2.micro",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "NAT1"
-                    }
-                ],
-                "NetworkInterfaces": [
-                    {
-                        "GroupSet": [
-                            {
-                                "Ref": "NATInstanceSecurityGroup"
-                            }
-                        ],
-                        "AssociatePublicIpAddress": "true",
-                        "DeviceIndex": "0",
-                        "DeleteOnTermination": "true",
-                        "SubnetId": {
-	                        "Fn::GetAtt": [
-	                            "VPCStack",
-	                            "Outputs.PublicSubnet1ID"
-	                        ]
-	                    }
-                    }
-                ],
-                "KeyName": {
-                    "Fn::If": [
-                        "NATInstanceCondition",
-                        {
-                            "Ref": "KeyPairName"
-                        },
-                        {
-                            "Ref": "AWS::NoValue"
-                        }
-                    ]
-                },
-                "SourceDestCheck": "false"
-            }
-        },
-        "NATInstanceSecurityGroup": {
-            "Condition": "NATInstanceCondition",
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Enables outbound internet access for the VPC via the NAT instances",
-                "VpcId": {
-                    "Fn::GetAtt": [
-                            "VPCStack",
-                            "Outputs.VPCID"
-                        ]
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "-1",
-                        "FromPort": "1",
-                        "ToPort": "65535",
-                        "CidrIp": {
-                            "Ref": "VPCCIDR"
-                        }
-                    }
-                ]
             }
         },
         "ClusterStack": {
@@ -968,7 +779,10 @@
                         "Fn::If": [
                        			"ReplicaOneCondition",
                                 {
-                                   "Ref": "PrivateSubnet1ID"
+                                   "Fn::GetAtt": [
+                            			"SubnetNATStack",
+                            			"Outputs.PrivateSubnetID"
+                        		     ]
                                 },
                         		{
                                 	"Fn::GetAtt": [
@@ -982,7 +796,10 @@
                         "Fn::If": [
                        			"ReplicaOneCondition",
                        			{
-                                   "Ref": "PrivateSubnet1ID"
+                                   "Fn::GetAtt": [
+                            			"SubnetNATStack",
+                            			"Outputs.PrivateSubnetID"
+                        		     ]
                                 },
                                 {
                                 	"Fn::GetAtt": [
