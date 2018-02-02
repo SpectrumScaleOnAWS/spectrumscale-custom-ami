@@ -11,6 +11,7 @@
                     "Parameters": [
                         "BlockSize",
                         "DataReplica",
+                        "CreatePlacementGroup",
                         "GpfsMountPoint"
                     ]
                 },
@@ -21,7 +22,8 @@
                     "Parameters": [
                         "EBSType",
                         "DiskPerNode",
-                        "DiskSize"
+                        "DiskSize",
+                        "RootVolume"
                     ]
                 },
                 {
@@ -67,6 +69,7 @@
                     },
                     "Parameters": [
                         "SpectrumS3Bucket",
+                        "AmiID",
                         "OperatorEmail"
                     ]
                 },
@@ -133,6 +136,15 @@
                 },
                 "SpectrumS3Bucket": {
                     "default": "Spectrum S3 Bucket"
+                },
+                "AmiID": {
+                    "default": "Spectrum Scale Ami ID"
+                },
+                "CreatePlacementGroup": {
+                    "default": "Placement Group"
+                },
+                "RootVolume": {
+                    "default": "Root Volume"
                 }
             }
         }
@@ -166,13 +178,19 @@
             ]
         },
         "DataReplica": {
-            "Description": "Number of replica copies of data across the all cluster nodes on two AZs.",
+            "Description": "Number of replica copies of data across the cluster nodes.",
             "Type": "Number",
             "Default": "2",
             "AllowedValues": [
                 "1",
                 "2"
             ]
+        },
+        "RootVolume": {
+            "Description": "Enter rool volume for nodes.",
+            "Type": "Number",
+            "Default": "100",
+            "MinValue": 100
         },
         "GpfsMountPoint": {
             "Type": "String",
@@ -265,7 +283,7 @@
         "ServerInstanceType": {
             "Description": "Instance type to use for the NSD Server nodes instances.",
             "Type": "String",
-            "Default": "t2.medium",
+            "Default": "m4.large",
             "AllowedValues": [
                 "t2.micro",
                 "t2.small",
@@ -361,7 +379,7 @@
         "ComputeInstanceType": {
             "Description": "Instance type to use for the compute node instances.",
             "Type": "String",
-            "Default": "t2.medium",
+            "Default": "m4.large",
             "AllowedValues": [
                 "t2.micro",
                 "t2.small",
@@ -486,6 +504,22 @@
             "MinLength": "0",
             "Default": "",
             "ConstraintDescription": "S3 bucket name can include numbers, lowercase letters, lowercase letters, and hyphens (-). It cannot start or end with a hyphen (-)."
+        },
+        "AmiID": {
+            "Description": "ID of the Spectrum Scale AMI (e.g. ami-22844c58).",
+            "Type": "String",
+            "AllowedPattern": "ami-[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])",
+            "MinLength": "10",
+            "ConstraintDescription": "Must be a valid Spectrum Scale AMI id (e.g. ami-22844c58)."
+        },
+        "CreatePlacementGroup": {
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Default": "false",
+            "Description": "Set to true with dataReplica=1 to include your cluster nodes into placement group.",
+            "Type": "String"  
         }
     },
     "Rules": {
@@ -510,55 +544,6 @@
             ]
         }
     },
-    "Mappings": {
-        "RegionMap": {
-            "us-east-1": {
-                "AMI": "ami-bffd9bc5"
-            },
-            "us-east-2": {
-                "AMI": "ami-15163f70"
-            },
-            "us-west-1": {
-                "AMI": "ami-1ca59f7c"
-            },
-            "us-west-2": {
-                "AMI": "ami-ea06dc92"
-            },
-            "ca-central-1": {
-                "AMI": "ami-5f12a93b"
-            },
-            "eu-west-1": {
-                "AMI": "ami-fd289684"
-            },
-            "eu-central-1": {
-                "AMI": "ami-37018f58"
-            },
-            "eu-west-2": {
-                "AMI": "ami-4fd7c92b"
-            },
-            "eu-west-3": {
-                "AMI": "ami-f24cfb8f"
-            },
-            "ap-southeast-1": {
-                "AMI": "ami-95ec89e9"
-            },
-            "ap-southeast-2": {
-                "AMI": "ami-6872860a"
-            },
-            "ap-northeast-2": {
-                "AMI": "ami-76af0918"
-            },
-            "ap-northeast-1": {
-                "AMI": "ami-d0cd4ab6"
-            },
-            "ap-south-1": {
-                "AMI": "ami-cc85cca3"
-            }, 
-            "sa-east-1": {
-                "AMI": "ami-7c5c1b10"
-            }
-        }
-    },
     "Conditions": {
         "GovCloudCondition": {
             "Fn::Equals": [
@@ -576,6 +561,21 @@
 	           	"1"
            	]     
         },
+        "PlacementGroupNeeded": {
+           "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CreatePlacementGroup"
+                        },
+                        "true"
+                    ]
+                }, 
+                {
+                    "Condition": "ReplicaOneCondition"
+                }
+            ]   
+        },
         "SpectrumS3BucketProvided": {
            "Fn::Equals": [
                 {
@@ -586,6 +586,13 @@
         }
     },
     "Resources": {
+        "PlacementGroup" : {
+              "Condition": "PlacementGroupNeeded",
+			  "Type" : "AWS::EC2::PlacementGroup",
+			  "Properties" : {
+			      "Strategy" : "cluster"
+			  }
+		},
         "NotificationTopic": {
             "Type": "AWS::SNS::Topic",
             "Properties": {
@@ -769,10 +776,14 @@
                                         "ec2:StopInstances",
                                         "ec2:DescribeInstanceRecoveryAttribute",
                                         "ec2:RecoverInstances",
+                                        "ec2:PlacementGroup",
+                                        "ec2:CreatePlacementGroup",
+                                        "ec2:DescribePlacementGroups",
+                                        "ec2:DeletePlacementGroup",
                                         "ssm:DescribeParameters",
-      									                "ssm:PutParameter",
-      									                "ssm:GetParameters",
-      									                "ssm:DeleteParameter"
+      									"ssm:PutParameter",
+      									"ssm:GetParameters",
+      									"ssm:DeleteParameter"
                                     ],
                                     "Effect": "Allow"
                                 },
@@ -1569,7 +1580,6 @@
                                             "IFS=' ' read -a adminArr <<< `cat /var/log/instance_server.out | awk '{print $4,$1}' | sort | awk '{print $2}'`\n",
                                             "ADMIN_INS=${adminArr[0]}\n",
                                             "echo ADMIN_INS=$ADMIN_INS\n",
-                                            "echo adminArr:$adminArr\n",
                                             "adminNode=$(cat /var/log/instance_server.out | grep ${adminArr[0]} | awk '{print $2}')\n",
                                             "echo adminNode=$adminNode\n",
                                             "if [ $INSTANCE_ID == $ADMIN_INS ]\n",
@@ -2171,13 +2181,7 @@
             },
             "Properties": {
                 "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AMI"
-                    ]
+                    "Ref": "AmiID"
                 },
                 "InstanceType": {
                     "Ref": "ServerInstanceType"
@@ -2193,7 +2197,9 @@
                     {
                         "DeviceName": "/dev/sda1",
                         "Ebs": {
-                            "VolumeSize": "100",
+                            "VolumeSize": {
+                               "Ref": "RootVolume"
+                            },
                             "VolumeType": "gp2"
                         }
                     }
@@ -2245,6 +2251,17 @@
                 },
                 "MinSize": {
                     "Ref": "ServerNodeCount"
+                },
+                "PlacementGroup": {
+                    "Fn::If": [
+                       "PlacementGroupNeeded",
+                       {
+                          "Ref": "PlacementGroup"
+                       },
+                       {
+                            "Ref": "AWS::NoValue"
+                       }
+                    ]     
                 },
                 "Cooldown": "300",
                 "NotificationConfiguration": {
@@ -2774,7 +2791,7 @@
                             "02_gpfs-compute-setup": {
                                 "command": "/usr/bin/gpfs-compute-setup.sh | while IFS= read -r line; do printf \"%s [INFO] %s\n\" \"$(date)\" \"$line\"; done >> /var/log/gpfs/gpfs-compute-setup.log 2>&1"
                             },
-                            "03_gpfs-compute-setup": {
+                            "03_gpfs-passwordless-setup": {
                                 "command": "/usr/bin/gpfs-passwordless-setup.sh | while IFS= read -r line; do printf \"%s [INFO] %s\n\" \"$(date)\" \"$line\"; done >> /var/log/gpfs/gpfs-passwordless-setup.log 2>&1"
                             },
                             "04_gpfs-auto-recovery-setup": {
@@ -2828,13 +2845,7 @@
             },
             "Properties": {
                 "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AMI"
-                    ]
+                    "Ref": "AmiID"
                 },
                 "InstanceType": {
                     "Ref": "ComputeInstanceType"
@@ -2850,7 +2861,9 @@
                     {
                         "DeviceName": "/dev/sda1",
                         "Ebs": {
-                            "VolumeSize": "100",
+                            "VolumeSize": {
+                               "Ref": "RootVolume"
+                            },
                             "VolumeType": "gp2"
                         }
                     }
@@ -2903,6 +2916,17 @@
                 },
                 "MinSize": {
                     "Ref": "ComputeNodeCount"
+                },
+                "PlacementGroup": {
+                    "Fn::If": [
+                       "PlacementGroupNeeded",
+                       {
+                          "Ref": "PlacementGroup"
+                       },
+                       {
+                            "Ref": "AWS::NoValue"
+                       }
+                    ]     
                 },
                 "Cooldown": "300",
                 "NotificationConfiguration": {

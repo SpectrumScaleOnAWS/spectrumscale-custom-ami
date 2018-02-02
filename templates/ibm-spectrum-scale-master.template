@@ -11,6 +11,7 @@
                     "Parameters": [
                         "BlockSize",
                         "DataReplica",
+                        "CreatePlacementGroup",
                         "GpfsMountPoint"
                     ]
                 },
@@ -21,7 +22,8 @@
                     "Parameters": [
                         "EBSType",
                         "DiskPerNode",
-                        "DiskSize"
+                        "DiskSize",
+                        "RootVolume"
                     ]
                 },
                 {
@@ -81,6 +83,7 @@
                     },
                     "Parameters": [
                         "SpectrumS3Bucket",
+                        "AmiID",
                         "OperatorEmail"
                     ]
                 },
@@ -168,7 +171,16 @@
                 },
                 "BastionAMIOS": {
                     "default": "Bastion AMI OS"
-                }
+                },
+                "AmiID": {
+                    "default": "Spectrum Scale Ami ID"
+                },
+                "CreatePlacementGroup": {
+                    "default": "Placement Group"
+                },
+                "RootVolume": {
+                    "default": "Root Volume"
+                }   
             }
         }
     },
@@ -183,14 +195,14 @@
         "QSS3BucketName": {
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
             "ConstraintDescription": "Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
-            "Default": "quickstart-reference",
+            "Default": "ibm-spectrum-scale",
             "Description": "S3 bucket name for the Quick Start assets. This string can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
             "Type": "String"
         },
         "QSS3KeyPrefix": {
             "AllowedPattern": "^[0-9a-zA-Z-/]*$",
             "ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
-            "Default": "ibm/spectrum/scale/latest/",
+            "Default": "QuickStart-AMI/spectrum-scale-02012018/",
             "Description": "S3 key prefix for the Quick Start assets. Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
             "Type": "String"
         },
@@ -224,6 +236,12 @@
                 "1",
                 "2"
             ]
+        },
+        "RootVolume": {
+            "Description": "Enter rool volume for nodes.",
+            "Type": "Number",
+            "Default": "100",
+            "MinValue": 100
         },
         "GpfsMountPoint": {
             "Type": "String",
@@ -316,7 +334,7 @@
         "ServerInstanceType": {
             "Description": "Instance type to use for the NSD Server nodes instances.",
             "Type": "String",
-            "Default": "t2.medium",
+            "Default": "m4.large",
             "AllowedValues": [
                 "t2.micro",
                 "t2.small",
@@ -412,7 +430,7 @@
         "ComputeInstanceType": {
             "Description": "Instance type to use for the Compute node instances.",
             "Type": "String",
-            "Default": "t2.medium",
+            "Default": "m4.large",
             "AllowedValues": [
                 "t2.micro",
                 "t2.small",
@@ -585,6 +603,22 @@
             "ConstraintDescription": "Must be a valid email address.",
             "Description": "Email address that notifications of any scaling operations will be sent to.",
             "Type": "String"
+        },
+        "AmiID": {
+            "Description": "ID of the Spectrum Scale AMI (e.g. ami-22844c58).",
+            "Type": "String",
+            "AllowedPattern": "ami-[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])",
+            "MinLength": "10",
+            "ConstraintDescription": "Must be a valid Spectrum Scale AMI id (e.g. ami-22844c58)."
+        },
+        "CreatePlacementGroup": {
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Default": "false",
+            "Description": "Set to this parameter true and \"Data replica\" to include your cluster nodes into placement group.",
+            "Type": "String"  
         }
     },
     "Conditions":{
@@ -596,13 +630,28 @@
                 "us-gov-west-1"
             ]
         },
-         "ReplicaOneCondition": {
-            "Fn::Equals": [
+        "ReplicaOneCondition": {
+           "Fn::Equals": [
                 {
-	                "Ref": "DataReplica"
-	            },
-	            "1"
-            ]     
+	              	"Ref": "DataReplica"
+	           	},
+	           	"1"
+           	]     
+        },
+        "PlacementGroupNeeded": {
+           "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CreatePlacementGroup"
+                        },
+                        "true"
+                    ]
+                }, 
+                {
+                    "Condition": "ReplicaOneCondition"
+                }
+            ]   
         }
     },
     "Resources": {
@@ -668,10 +717,7 @@
                         ]
                     },
                     "VPCCIDR": {
-                        "Fn::GetAtt": [
-                               "VPCStack",
-                               "Outputs.VPCCIDR"
-                         ]
+                        "Ref": "VPCCIDR"
                     },
                     "VpcId": {
                          "Fn::GetAtt": [
@@ -833,6 +879,18 @@
                     },
                     "OperatorEmail": {
                         "Ref": "OperatorEmail"
+                    },
+                    "CreatePlacementGroup": {
+                        "Fn::If": [
+                       			"PlacementGroupNeeded",
+                       			true,
+                                {
+                                	"Ref": "AWS::NoValue" 
+                        		}		
+                         ] 
+                    },
+                    "AmiID": {
+                        "Ref": "AmiID"
                     }
                 }
             }
